@@ -1,14 +1,19 @@
-FROM golang:1.16-alpine
+# Alpine is chosen for its small footprint
+# compared to Ubuntu
+FROM golang:1.20.2-alpine3.17
 
 WORKDIR /app
 
-COPY . .
-
-RUN apk add --no-cache git
+# Download necessary Go modules
+COPY go.mod ./
 RUN go mod download
+
+COPY *.go ./
+COPY .env ./
+RUN go mod tidy
 
 RUN go build -o main .
 
-EXPOSE 8080
+EXPOSE ${PORT}
 
 CMD ["./main"]

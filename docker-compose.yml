@@ -4,20 +4,25 @@ services:
   app:
     build: .
     ports:
-      - "8080:8080"
+      - "${PORT}:${PORT}"
     environment:
-      MONGODB_URI: mongodb://mongo:27017/mongodb
-      REDIS_ADDR: redis:6379
+      - MONGO_HOST=${MONGO_HOST}
+      - MONGO_PORT=${MONGO_PORT}
     depends_on:
       - mongo
       - redis
 
   mongo:
-    image: mongo:4.4.6-bionic
+    image: mongo
     restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_PORT: ${MONGO_PORT}
     volumes:
       - ./data/mongo:/data/db
-
+    # ports:
+    #   - 27018:27017
   redis:
     image: redis:6.2.3-alpine
     restart: always
