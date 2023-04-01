@@ -38,14 +38,15 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	e.GET("/", hello)
+	e.POST("/short", makeShortenedLink)
 
-	port := fmt.Sprintf(":%s", os.Getenv("PORT"))
+	port := fmt.Sprintf(":%s", os.Getenv("APPLICATION_PORT"))
 	e.Logger.Fatal(e.Start(port))
 }
 
-func hello(c echo.Context) error {
-	return c.String(http.StatusOK, "<h1>Hello wiht Golang!</h1>")
+func makeShortenedLink(c echo.Context) error {
+	url := c.FormValue("url")
+	return c.String(http.StatusOK, url)
 }
 
 func mongoInsert() error {
