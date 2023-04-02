@@ -21,8 +21,8 @@ services:
       MONGO_PORT: ${MONGO_PORT}
     volumes:
       - ./data/mongo:/data/db
-    # ports:
-    #   - 27018:27017
+    ports:
+      - 27018:27017
   redis:
     image: redis:6.2.3-alpine
     restart: always
