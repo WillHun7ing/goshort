@@ -4,7 +4,7 @@ services:
   app:
     build: .
     ports:
-      - "${APPLICATION_PORT}:${APPLICATION_PORT}"
+      - "${APP_PORT}:${APP_PORT}"
     environment:
       - MONGO_HOST=${MONGO_HOST}
       - MONGO_PORT=${MONGO_PORT}

@@ -8,6 +8,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/teris-io/shortid"
+
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -17,8 +19,10 @@ import (
 )
 
 type User struct {
-	Name    string `bson:"name"`
-	Surname string `bson:"surname"`
+	Name  string `json:"name" xml:"name"`
+	Email string `json:"email" xml:"email"`
+	Long  string `json:"long" xml:"long"`
+	Short string `json:"short" xml:"short"`
 }
 
 func main() {
@@ -27,6 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
+
+	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
+	shortid.SetDefault(sid)
 
 	err = mongoInsert()
 	if err != nil {
@@ -40,13 +47,23 @@ func main() {
 
 	e.POST("/short", makeShortenedLink)
 
-	port := fmt.Sprintf(":%s", os.Getenv("APPLICATION_PORT"))
+	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
 	e.Logger.Fatal(e.Start(port))
 }
 
 func makeShortenedLink(c echo.Context) error {
 	url := c.FormValue("url")
-	return c.String(http.StatusOK, url)
+	short, err := shortid.Generate()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	u := &User{
+		Name:  "Mohammadreza",
+		Email: "h9edev@gmail.com",
+		Long:  url,
+		Short: short,
+	}
+	return c.JSON(http.StatusOK, u)
 }
 
 func mongoInsert() error {
@@ -61,8 +78,10 @@ func mongoInsert() error {
 
 	collection := client.Database("mpostument").Collection("users")
 	user := User{
-		Name:    "Maksym",
-		Surname: "Postument",
+		Name:  "Maksym",
+		Email: "h9edev@gmail.com",
+		Long:  "",
+		Short: "",
 	}
 
 	res, err := collection.InsertOne(ctx, user)
