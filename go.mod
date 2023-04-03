@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.10.2
+	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
 	go.mongodb.org/mongo-driver v1.11.3
 )
 

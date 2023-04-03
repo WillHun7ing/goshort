@@ -16,6 +16,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"goshort/database"
 )
 
 type User struct {
@@ -35,7 +37,7 @@ func main() {
 	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
 	shortid.SetDefault(sid)
 
-	err = mongoInsert()
+	err = mongoConnect()
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -66,7 +68,7 @@ func makeShortenedLink(c echo.Context) error {
 	return c.JSON(http.StatusOK, u)
 }
 
-func mongoInsert() error {
+func mongoConnect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	mongoUri := fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
@@ -76,7 +78,10 @@ func mongoInsert() error {
 	}
 	defer client.Disconnect(ctx)
 
-	collection := client.Database("mpostument").Collection("users")
+	db := database.CreateDatabase(client, "goshort")
+	usersCollection := db.CreateCollection("users")
+
+	// usersCollection := client.Database("goshort").Collection("users")
 	user := User{
 		Name:  "Maksym",
 		Email: "h9edev@gmail.com",
@@ -84,7 +89,7 @@ func mongoInsert() error {
 		Short: "",
 	}
 
-	res, err := collection.InsertOne(ctx, user)
+	res, err := usersCollection.InsertOne(ctx, user)
 	if err != nil {
 		return err
 	}
