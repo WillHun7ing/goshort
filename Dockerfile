@@ -9,4 +9,4 @@ COPY . .
 RUN go build -v -o /goshort
 EXPOSE ${PORT}
 
-CMD ["goshort"]
+CMD ["/goshort"]
