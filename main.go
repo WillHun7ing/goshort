@@ -20,11 +20,10 @@ import (
 	"goshort/database"
 )
 
-type User struct {
-	Name  string `json:"name" xml:"name"`
-	Email string `json:"email" xml:"email"`
+type Link struct {
 	Long  string `json:"long" xml:"long"`
 	Short string `json:"short" xml:"short"`
+	Visit uint32 `json:"visit" xml:"visit"`
 }
 
 func main() {
@@ -37,7 +36,7 @@ func main() {
 	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
 	shortid.SetDefault(sid)
 
-	err = mongoConnect()
+	ctx, collection, err := mongoConnect()
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -47,54 +46,50 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	e.POST("/short", makeShortenedLink)
+	e.POST("/short", func(c echo.Context) error {
+		url := c.FormValue("url")
+		short, err := shortid.Generate()
+		if err != nil {
+			log.Fatalln(err)
+		}
+		l := &Link{
+			Long:  url,
+			Short: short,
+			Visit: 0,
+		}
+		l.insertOnDb(ctx, collection)
+		return c.JSON(http.StatusOK, l)
+	})
+	// e.POST("/:shortUrl", func(c echo.Context) error {
+
+	// })
 
 	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
 	e.Logger.Fatal(e.Start(port))
 }
 
-func makeShortenedLink(c echo.Context) error {
-	url := c.FormValue("url")
-	short, err := shortid.Generate()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	u := &User{
-		Name:  "Mohammadreza",
-		Email: "h9edev@gmail.com",
-		Long:  url,
-		Short: short,
-	}
-	return c.JSON(http.StatusOK, u)
-}
-
-func mongoConnect() error {
+func mongoConnect() (context.Context, *mongo.Collection, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	mongoUri := fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	defer client.Disconnect(ctx)
 
 	db := database.CreateDatabase(client, "goshort")
-	usersCollection := db.CreateCollection("users")
+	c := db.CreateCollection("links")
 
-	// usersCollection := client.Database("goshort").Collection("users")
-	user := User{
-		Name:  "Maksym",
-		Email: "h9edev@gmail.com",
-		Long:  "",
-		Short: "",
-	}
+	return ctx, c, nil
+}
 
-	res, err := usersCollection.InsertOne(ctx, user)
+func (data *Link) insertOnDb(ctx context.Context, c *mongo.Collection) error {
+	res, err := c.InsertOne(ctx, data)
 	if err != nil {
 		return err
 	}
 	id := res.InsertedID
 	log.Printf("Insert ID, %s", id)
 	return nil
-
 }
