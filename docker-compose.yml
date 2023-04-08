@@ -5,15 +5,17 @@ services:
     build: .
     ports:
       - "${APP_PORT}:${APP_PORT}"
-    environment:
-      - MONGO_HOST=${MONGO_HOST}
-      - MONGO_PORT=${MONGO_PORT}
+    # environment:
+    #   - MONGO_HOST=${MONGO_HOST}
+    #   - MONGO_PORT=${MONGO_PORT}
+    volumes:
+      - ./data/app:/data/db
     depends_on:
       - mongo
       - redis
 
   mongo:
-    image: mongo
+    image: 'mongo'
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
@@ -23,6 +25,14 @@ services:
       - ./data/mongo:/data/db
     ports:
       - 27018:27017
+  mongo_express:
+      image: 'mongo-express'
+      container_name: mongo_express
+      depends_on:
+          - 'mongo'
+      ports:
+          - '12345:8081'
+      restart: always
   redis:
-    image: redis:6.2.3-alpine
+    image: 'redis'
     restart: always
