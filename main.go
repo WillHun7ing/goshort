@@ -129,24 +129,6 @@ func main() {
 			return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
 		}
 		return c.JSON(http.StatusOK, links)
-
-		// cursor, err := collection.Find(context.TODO(), bson.D{})
-		// if err != nil {
-		// 	fmt.Println("Finding all documtes err: ", err)
-		// 	defer cursor.Close(ctx)
-		// } else {
-		// 	var result bson.M
-		// 	for cursor.Next(ctx) {
-		// 		err := cursor.Decode(&result)
-		// 		if err != nil {
-		// 			fmt.Println("Get next document error: ", err)
-		// 		} else {
-		// 			fmt.Println("The value of link: ", result)
-		// 		}
-		// 	}
-		// 	return c.JSON(http.StatusOK, result)
-		// }
-		// return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
 	})
 
 	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
