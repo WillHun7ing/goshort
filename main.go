@@ -39,40 +39,33 @@ func createLink(link *Link) error {
 
 func getAll() ([]*Link, error) {
 	filter := bson.D{{}}
-	return filterTasks(filter)
+	return filterLinks(filter)
 }
 
-func filterTasks(filter interface{}) ([]*Link, error) {
-	// A slice of tasks for storing the decoded documents
-	var tasks []*Link
-
-	cur, err := collection.Find(ctx, filter)
+func filterLinks(filter interface{}) ([]*Link, error) {
+	var links []*Link
+	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
-		return tasks, err
+		return links, err
 	}
-
-	for cur.Next(ctx) {
-		var t Link
-		err := cur.Decode(&t)
+	for cursor.Next(ctx) {
+		var l Link
+		err := cursor.Decode(&l)
 		if err != nil {
-			return tasks, err
+			return links, err
 		}
-
-		tasks = append(tasks, &t)
+		fmt.Println("Link is = ", l)
+		links = append(links, &l)
+	}
+	if err := cursor.Err(); err != nil {
+		return links, err
+	}
+	cursor.Close(ctx)
+	if len(links) == 0 {
+		return links, mongo.ErrNoDocuments
 	}
 
-	if err := cur.Err(); err != nil {
-		return tasks, err
-	}
-
-	// once exhausted, close the cursor
-	cur.Close(ctx)
-
-	if len(tasks) == 0 {
-		return tasks, mongo.ErrNoDocuments
-	}
-
-	return tasks, nil
+	return links, nil
 }
 
 func main() {
@@ -131,23 +124,29 @@ func main() {
 	})
 
 	e.GET("/", func(c echo.Context) error {
-		cursor, err := collection.Find(context.TODO(), bson.D{})
+		links, err := getAll()
 		if err != nil {
-			fmt.Println("Finding all documtes err: ", err)
-			defer cursor.Close(ctx)
-		} else {
-			var result bson.M
-			for cursor.Next(ctx) {
-				err := cursor.Decode(&result)
-				if err != nil {
-					fmt.Println("Get next document error: ", err)
-				} else {
-					fmt.Println("The value of link: ", result)
-				}
-			}
-			return c.JSON(http.StatusOK, result)
+			return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
 		}
-		return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
+		return c.JSON(http.StatusOK, links)
+
+		// cursor, err := collection.Find(context.TODO(), bson.D{})
+		// if err != nil {
+		// 	fmt.Println("Finding all documtes err: ", err)
+		// 	defer cursor.Close(ctx)
+		// } else {
+		// 	var result bson.M
+		// 	for cursor.Next(ctx) {
+		// 		err := cursor.Decode(&result)
+		// 		if err != nil {
+		// 			fmt.Println("Get next document error: ", err)
+		// 		} else {
+		// 			fmt.Println("The value of link: ", result)
+		// 		}
+		// 	}
+		// 	return c.JSON(http.StatusOK, result)
+		// }
+		// return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
 	})
 
 	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
