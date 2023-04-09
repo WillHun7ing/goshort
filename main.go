@@ -37,6 +37,23 @@ func createLink(link *Link) error {
 	return err
 }
 
+func incrementVisit(filter bson.D, link *Link) error {
+	update := bson.D{{"$set", bson.D{{"visit", link.Visit + 1}}}}
+	_, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Update value went with a problem")
+	}
+	return nil
+}
+
+func findLinkWithShortUrl(filter bson.D, result *Link) error {
+	err := collection.FindOne(ctx, filter).Decode(result)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Please provide valid shortened url")
+	}
+	return nil
+}
+
 func getAll() ([]*Link, error) {
 	filter := bson.D{{}}
 	return filterLinks(filter)
@@ -117,10 +134,10 @@ func main() {
 	e.POST("/:shortUrl", func(c echo.Context) error {
 		shortUrl := c.Param("shortUrl")
 		var result Link
-		err := collection.FindOne(ctx, bson.D{{"short", shortUrl}}).Decode(&result)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "Please provide valid shortened url")
-		}
+		filter := bson.D{{"short", shortUrl}}
+		findLinkWithShortUrl(filter, &result)
+		incrementVisit(filter, &result)
+		findLinkWithShortUrl(filter, &result)
 		return c.JSON(http.StatusOK, result)
 	})
 
