@@ -26,23 +26,6 @@ type Link struct {
 
 var collection *mongo.Collection
 
-// var ctx = context.TODO()
-
-// func init() {
-// 	mongoUri := fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
-// 	clientOptions := options.Client().ApplyURI(mongoUri)
-// 	client, err := mongo.Connect(ctx, clientOptions)
-
-// 	if err != nil {
-// 		log.Fatal("Mongo init, ", err)
-// 	}
-// 	err = client.Ping(ctx, nil)
-// 	if err != nil {
-// 		log.Fatal("Mongo client pign, ", err)
-// 	}
-// 	collection = client.Database("goshort").Collection("links")
-// }
-
 var ctx context.Context
 var cancel context.CancelFunc
 
@@ -55,7 +38,6 @@ func createLink(link *Link) error {
 }
 
 func getAll() ([]*Link, error) {
-	// passing bson.D{{}} matches all documents in the collection
 	filter := bson.D{{}}
 	return filterTasks(filter)
 }
@@ -103,10 +85,7 @@ func main() {
 	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
 	shortid.SetDefault(sid)
 
-	// ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	ctx := context.Background()
-	// defer cancel()
-	// mongoUri := fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://127.0.0.1:27017/"))
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
@@ -152,45 +131,25 @@ func main() {
 	})
 
 	e.GET("/", func(c echo.Context) error {
-		// links, err := getAll()
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		return c.JSON(http.StatusOK, &Link{})
+		cursor, err := collection.Find(context.TODO(), bson.D{})
+		if err != nil {
+			fmt.Println("Finding all documtes err: ", err)
+			defer cursor.Close(ctx)
+		} else {
+			var result bson.M
+			for cursor.Next(ctx) {
+				err := cursor.Decode(&result)
+				if err != nil {
+					fmt.Println("Get next document error: ", err)
+				} else {
+					fmt.Println("The value of link: ", result)
+				}
+			}
+			return c.JSON(http.StatusOK, result)
+		}
+		return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
 	})
 
 	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
 	e.Logger.Fatal(e.Start(port))
 }
-
-/*
-func mongoConnect() (*context.Context, *mongo.Collection, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	mongoUri := fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
-	if err != nil {
-		return nil, nil, err
-	}
-	defer client.Disconnect(ctx)
-
-	// db := database.CreateDatabase(client, "goshort")
-	// c := db.CreateCollection("links")
-
-	connection := client.Database("goshort")
-	c := connection.Collection("links")
-
-	return &ctx, c, nil
-}
-
-func (data *Link) insertOnDb(ctx *context.Context, c *mongo.Collection) error {
-	res, err := c.InsertOne(*ctx, data)
-	if err != nil {
-		return err
-	}
-	id := res.InsertedID
-	log.Printf("Insert ID, %s", id)
-	fmt.Println("😈😈😈😈 Insert Id", id)
-	return nil
-}
-*/
