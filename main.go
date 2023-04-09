@@ -141,10 +141,15 @@ func main() {
 
 	})
 
-	// e.POST("/:shortUrl", func(c echo.Context) error {
-	// 	shortUrl := c.Param("shortUrl")
-	// 	return c.JSON(http.StatusOK, shortUrl)
-	// })
+	e.POST("/:shortUrl", func(c echo.Context) error {
+		shortUrl := c.Param("shortUrl")
+		var result Link
+		err := collection.FindOne(ctx, bson.D{{"short", shortUrl}}).Decode(&result)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Please provide valid shortened url")
+		}
+		return c.JSON(http.StatusOK, result)
+	})
 
 	e.GET("/", func(c echo.Context) error {
 		// links, err := getAll()
