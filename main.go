@@ -45,6 +45,7 @@ func createLink(link *Link) error {
 func checkCachedValues(key string, link *Link) (bool, error) {
 	isCached, err := getFromCache(key, link)
 	if err != nil {
+		addToCache(link.Long, link)
 		return false, err
 	}
 	return isCached, nil
