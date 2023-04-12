@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/teris-io/shortid"
 
@@ -16,6 +18,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/go-redis/redis"
 )
 
 type Link struct {
@@ -46,6 +50,19 @@ func incrementVisit(filter bson.D, link *Link) error {
 	return nil
 }
 
+func checkCachedValues(shortUrl string) error {
+	// var respMessage map[string]interface{}
+	var l Link
+	isCached, err := getFromCache(shortUrl, &l)
+	if err != nil {
+		return err
+	}
+	if isCached == true {
+		// l["_source"] = "Redis"
+	}
+	return nil
+}
+
 func findLinkWithShortUrl(filter bson.D, result *Link) error {
 	err := collection.FindOne(ctx, filter).Decode(result)
 	if err != nil {
@@ -71,7 +88,6 @@ func filterLinks(filter interface{}) ([]*Link, error) {
 		if err != nil {
 			return links, err
 		}
-		fmt.Println("Link is = ", l)
 		links = append(links, &l)
 	}
 	if err := cursor.Err(); err != nil {
@@ -83,6 +99,48 @@ func filterLinks(filter interface{}) ([]*Link, error) {
 	}
 
 	return links, nil
+}
+
+func addToCache(cacheName string, link *Link) error {
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		// Password: "123456",
+		DB: 0,
+	})
+
+	jsonString, err := json.Marshal(link)
+	if err != nil {
+		log.Fatalf("Error while marshaling data, %s", err)
+		return err
+	}
+	err = redisClient.Set(cacheName, jsonString, 24*time.Hour).Err()
+	if err != nil {
+		log.Fatalf("Error while storing data to redis, %s", err)
+		return err
+	}
+
+	return nil
+}
+
+func getFromCache(cacheName string, link *Link) (bool, error) {
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		// Password: "123456",
+		DB: 0,
+	})
+
+	cachedLink, err := redisClient.Get(cacheName).Bytes()
+	if err != nil {
+		log.Fatalf("Error while retrieving data from redis, %s", err)
+		return false, nil
+	}
+	err = json.Unmarshal(cachedLink, &link)
+	if err != nil {
+		log.Fatalf("Error while unmarshaling data, %s", err)
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func main() {
@@ -124,6 +182,9 @@ func main() {
 				Short: short,
 				Visit: 0,
 			}
+			// var respMessage map[string]interface{}
+			// respMessage[short] = l
+			addToCache(short, l)
 			createLink(l)
 			return c.JSON(http.StatusOK, l)
 		}
@@ -135,6 +196,7 @@ func main() {
 		shortUrl := c.Param("shortUrl")
 		var result Link
 		filter := bson.D{{"short", shortUrl}}
+		checkCachedValues(shortUrl)
 		findLinkWithShortUrl(filter, &result)
 		incrementVisit(filter, &result)
 		findLinkWithShortUrl(filter, &result)
