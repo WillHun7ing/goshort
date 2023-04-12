@@ -38,36 +38,61 @@ func createLink(link *Link) error {
 	if err != nil {
 		log.Fatalln("Insert error: ", err)
 	}
+	addToCache(link.Long, link)
 	return err
 }
 
-func incrementVisit(filter bson.D, link *Link) error {
-	update := bson.D{{"$set", bson.D{{"visit", link.Visit + 1}}}}
-	_, err := collection.UpdateOne(ctx, filter, update)
+func checkCachedValues(key string, link *Link) (bool, error) {
+	isCached, err := getFromCache(key, link)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Update value went with a problem")
+		return false, err
+	}
+	return isCached, nil
+}
+
+func FetchItemFromCacheOrMongo(longUrl string, result *Link) error {
+	filter := bson.D{{"long", longUrl}}
+	isCached, _ := checkCachedValues(longUrl, result)
+	if isCached {
+		return nil
+	}
+	err := collection.FindOne(ctx, filter).Decode(result)
+	if err != nil {
+		short, err := shortid.Generate()
+		if err != nil {
+			log.Fatalln(err)
+		}
+		l := &Link{
+			Long:  longUrl,
+			Short: short,
+			Visit: 0,
+		}
+		createLink(l)
+		*result = *l
 	}
 	return nil
 }
 
-func checkCachedValues(shortUrl string) error {
-	// var respMessage map[string]interface{}
-	var l Link
-	isCached, err := getFromCache(shortUrl, &l)
+func FindItemOnMongo(shortUrl string, link *Link) error {
+	filter := bson.D{{"short", shortUrl}}
+	err := collection.FindOne(ctx, filter).Decode(link)
 	if err != nil {
 		return err
 	}
-	if isCached == true {
-		// l["_source"] = "Redis"
-	}
 	return nil
 }
 
-func findLinkWithShortUrl(filter bson.D, result *Link) error {
-	err := collection.FindOne(ctx, filter).Decode(result)
+func incrementVisit(shortUrl string, link *Link) error {
+	var result Link
+	FindItemOnMongo(shortUrl, &result)
+	filter := bson.D{{"short", shortUrl}}
+	update := bson.D{{"$set", bson.D{{"visit", result.Visit + 1}}}}
+	_, err := collection.UpdateOne(ctx, filter, update)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Please provide valid shortened url")
+		return echo.NewHTTPError(http.StatusBadRequest, "Update value had an issue")
 	}
+	FindItemOnMongo(shortUrl, link)
+	addToCache(link.Long, link)
 	return nil
 }
 
@@ -101,7 +126,7 @@ func filterLinks(filter interface{}) ([]*Link, error) {
 	return links, nil
 }
 
-func addToCache(cacheName string, link *Link) error {
+func addToCache(key string, link *Link) error {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 		// Password: "123456",
@@ -113,7 +138,7 @@ func addToCache(cacheName string, link *Link) error {
 		log.Fatalf("Error while marshaling data, %s", err)
 		return err
 	}
-	err = redisClient.Set(cacheName, jsonString, 24*time.Hour).Err()
+	err = redisClient.Set(key, jsonString, 24*time.Hour).Err()
 	if err != nil {
 		log.Fatalf("Error while storing data to redis, %s", err)
 		return err
@@ -122,16 +147,15 @@ func addToCache(cacheName string, link *Link) error {
 	return nil
 }
 
-func getFromCache(cacheName string, link *Link) (bool, error) {
+func getFromCache(key string, link *Link) (bool, error) {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 		// Password: "123456",
 		DB: 0,
 	})
 
-	cachedLink, err := redisClient.Get(cacheName).Bytes()
+	cachedLink, err := redisClient.Get(key).Bytes()
 	if err != nil {
-		log.Fatalf("Error while retrieving data from redis, %s", err)
 		return false, nil
 	}
 	err = json.Unmarshal(cachedLink, &link)
@@ -171,23 +195,7 @@ func main() {
 	e.POST("/short", func(c echo.Context) error {
 		url := c.FormValue("url")
 		var result Link
-		err := collection.FindOne(ctx, bson.D{{"long", url}}).Decode(&result)
-		if err != nil {
-			short, err := shortid.Generate()
-			if err != nil {
-				log.Fatalln(err)
-			}
-			l := &Link{
-				Long:  url,
-				Short: short,
-				Visit: 0,
-			}
-			// var respMessage map[string]interface{}
-			// respMessage[short] = l
-			addToCache(short, l)
-			createLink(l)
-			return c.JSON(http.StatusOK, l)
-		}
+		FetchItemFromCacheOrMongo(url, &result)
 		return c.JSON(http.StatusOK, result)
 
 	})
@@ -195,11 +203,7 @@ func main() {
 	e.POST("/:shortUrl", func(c echo.Context) error {
 		shortUrl := c.Param("shortUrl")
 		var result Link
-		filter := bson.D{{"short", shortUrl}}
-		checkCachedValues(shortUrl)
-		findLinkWithShortUrl(filter, &result)
-		incrementVisit(filter, &result)
-		findLinkWithShortUrl(filter, &result)
+		incrementVisit(shortUrl, &result)
 		return c.JSON(http.StatusOK, result)
 	})
 
