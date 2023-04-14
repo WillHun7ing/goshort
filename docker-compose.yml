@@ -25,14 +25,6 @@ services:
       - ./data/mongo:/data/db
     ports:
       - 27018:27017
-  mongo_express:
-      image: 'mongo-express'
-      container_name: mongo_express
-      depends_on:
-          - 'mongo'
-      ports:
-          - '12345:8081'
-      restart: always
   redis:
     image: 'redis'
     restart: always
