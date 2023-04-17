@@ -128,10 +128,14 @@ func filterLinks(filter interface{}) ([]*Link, error) {
 }
 
 func addToCache(key string, link *Link) error {
-	redisUri := fmt.Sprintf("redis:%s", os.Getenv("REDIS_PORT"))
+	var redisUri string
+	if os.Getenv("ENV") == "docker" {
+		redisUri = fmt.Sprintf("redis:%s", os.Getenv("REDIS_PORT"))
+	} else {
+		redisUri = "localhost:6379"
+	}
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: redisUri,
-		// Addr: "localhost:6379",
 		// Password: "123456",
 		DB: 0,
 	})
@@ -151,10 +155,14 @@ func addToCache(key string, link *Link) error {
 }
 
 func getFromCache(key string, link *Link) (bool, error) {
-	redisUri := fmt.Sprintf("redis:%s", os.Getenv("REDIS_PORT"))
+	var redisUri string
+	if os.Getenv("ENV") == "docker" {
+		redisUri = fmt.Sprintf("redis:%s", os.Getenv("REDIS_PORT"))
+	} else {
+		redisUri = "localhost:6379"
+	}
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: redisUri,
-		// Addr: "localhost:6379",
 		// Password: "123456",
 		DB: 0,
 	})
@@ -183,8 +191,12 @@ func main() {
 	shortid.SetDefault(sid)
 
 	ctx := context.Background()
-	mongoUri := fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
-	// mongoUri := "mongodb://127.0.0.1:27017/"
+	var mongoUri string
+	if os.Getenv("ENV") == "docker" {
+		mongoUri = fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
+	} else {
+		mongoUri = "mongodb://127.0.0.1:27017/"
+	}
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
