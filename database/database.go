@@ -8,15 +8,12 @@ type Database struct {
 }
 
 func CreateDatabase(client *mongo.Client, name string) *Database {
-	connection := client.Database(name)
-	db := Database{
+	return &Database{
 		Name:       name,
-		Connection: connection,
+		Connection: client.Database(name),
 	}
-	return &db
 }
 
 func (db *Database) CreateCollection(collectionName string) *mongo.Collection {
-	collection := db.Connection.Collection(collectionName)
-	return collection
+	return db.Connection.Collection(collectionName)
 }
