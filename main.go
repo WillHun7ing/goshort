@@ -182,57 +182,66 @@ func getFromCache(key string, link *Link) (bool, error) {
 
 func main() {
 	err := godotenv.Load(".env")
-
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
 
 	sid, err := shortid.New(1, shortid.DefaultABC, 2342)
+	if err != nil {
+		log.Fatalf("Error creating shortid generator: %v", err)
+	}
 	shortid.SetDefault(sid)
 
 	ctx := context.Background()
-	var mongoUri string
-	if os.Getenv("ENV") == "docker" {
-		mongoUri = fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
-	} else {
-		mongoUri = fmt.Sprintf("mongodb://127.0.0.1:%s/", os.Getenv("MONGO_PORT"))
-	}
+	mongoUri := getMongoURI()
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
+	if err != nil {
+		log.Fatalf("Error connecting to MongoDB: %v", err)
+	}
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
+			log.Fatalf("Error disconnecting from MongoDB: %v", err)
 		}
 	}()
 	collection = client.Database("goshort").Collection("links")
 
 	e := echo.New()
-
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	e.POST("/short", func(c echo.Context) error {
-		url := c.FormValue("url")
-		var result Link
-		FetchItemFromCacheOrMongo(url, &result)
-		return c.JSON(http.StatusOK, result)
-
-	})
-
-	e.POST("/:shortUrl", func(c echo.Context) error {
-		shortUrl := c.Param("shortUrl")
-		var result Link
-		incrementVisit(shortUrl, &result)
-		return c.JSON(http.StatusOK, result)
-	})
-
-	e.GET("/", func(c echo.Context) error {
-		links, err := getAll()
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
-		}
-		return c.JSON(http.StatusOK, links)
-	})
+	e.POST("/short", handleShortURL)
+	e.POST("/:shortUrl", handleIncrementVisit)
+	e.GET("/", handleGetAll)
 
 	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
 	e.Logger.Fatal(e.Start(port))
+}
+
+func getMongoURI() string {
+	if os.Getenv("ENV") == "docker" {
+		return fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
+	}
+	return fmt.Sprintf("mongodb://127.0.0.1:%s/", os.Getenv("MONGO_PORT"))
+}
+
+func handleShortURL(c echo.Context) error {
+	url := c.FormValue("url")
+	var result Link
+	FetchItemFromCacheOrMongo(url, &result)
+	return c.JSON(http.StatusOK, result)
+}
+
+func handleIncrementVisit(c echo.Context) error {
+	shortUrl := c.Param("shortUrl")
+	var result Link
+	incrementVisit(shortUrl, &result)
+	return c.JSON(http.StatusOK, result)
+}
+
+func handleGetAll(c echo.Context) error {
+	links, err := getAll()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
+	}
+	return c.JSON(http.StatusOK, links)
 }
