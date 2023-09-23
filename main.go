@@ -9,6 +9,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/hajbabaeim/goshort/internal/database"
+
 	"github.com/teris-io/shortid"
 
 	"github.com/joho/godotenv"
@@ -17,7 +19,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/go-redis/redis"
 )
@@ -192,18 +193,23 @@ func main() {
 	}
 	shortid.SetDefault(sid)
 
-	ctx := context.Background()
+	// ctx := context.Background()
 	mongoUri := getMongoURI()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
-	if err != nil {
-		log.Fatalf("Error connecting to MongoDB: %v", err)
-	}
+	// client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
+	client := database.CreateClient(mongoUri)
+	// if err != nil {
+	// 	log.Fatalf("Error connecting to MongoDB: %v", err)
+	// }
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
 			log.Fatalf("Error disconnecting from MongoDB: %v", err)
 		}
 	}()
-	collection = client.Database("goshort").Collection("links")
+
+	goshortDB := database.CreateDatabase(client, "goshort")
+	collection = goshortDB.CreateCollection("links")
+
+	// collection = client.Database("goshort").Collection("links")
 
 	e := echo.New()
 	e.Use(middleware.Logger())
