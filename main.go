@@ -31,10 +31,7 @@ type Link struct {
 
 var collection *mongo.Collection
 
-var ctx context.Context
-var cancel context.CancelFunc
-
-func createLink(link *Link) error {
+func createLink(ctx context.Context, link *Link) error {
 	_, err := collection.InsertOne(ctx, link)
 	if err != nil {
 		log.Fatalln("Insert error: ", err)
@@ -52,7 +49,7 @@ func checkCachedValues(key string, link *Link) (bool, error) {
 	return isCached, nil
 }
 
-func FetchItemFromCacheOrMongo(longUrl string, result *Link) error {
+func FetchItemFromCacheOrMongo(ctx context.Context, longUrl string, result *Link) error {
 	filter := bson.D{{"long", longUrl}}
 	isCached, _ := checkCachedValues(longUrl, result)
 	if isCached {
@@ -69,13 +66,13 @@ func FetchItemFromCacheOrMongo(longUrl string, result *Link) error {
 			Short: short,
 			Visit: 0,
 		}
-		createLink(l)
+		createLink(ctx, l)
 		*result = *l
 	}
 	return nil
 }
 
-func FindItemOnMongo(shortUrl string, link *Link) error {
+func FindItemOnMongo(ctx context.Context, shortUrl string, link *Link) error {
 	filter := bson.D{{"short", shortUrl}}
 	err := collection.FindOne(ctx, filter).Decode(link)
 	if err != nil {
@@ -84,26 +81,26 @@ func FindItemOnMongo(shortUrl string, link *Link) error {
 	return nil
 }
 
-func incrementVisit(shortUrl string, link *Link) error {
+func incrementVisit(ctx context.Context, shortUrl string, link *Link) error {
 	var result Link
-	FindItemOnMongo(shortUrl, &result)
+	FindItemOnMongo(ctx, shortUrl, &result)
 	filter := bson.D{{"short", shortUrl}}
 	update := bson.D{{"$set", bson.D{{"visit", result.Visit + 1}}}}
 	_, err := collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Update value had an issue")
 	}
-	FindItemOnMongo(shortUrl, link)
+	FindItemOnMongo(ctx, shortUrl, link)
 	addToCache(link.Long, link)
 	return nil
 }
 
-func getAll() ([]*Link, error) {
+func getAll(ctx context.Context) ([]*Link, error) {
 	filter := bson.D{{}}
-	return filterLinks(filter)
+	return filterLinks(ctx, filter)
 }
 
-func filterLinks(filter interface{}) ([]*Link, error) {
+func filterLinks(ctx context.Context, filter interface{}) ([]*Link, error) {
 	var links []*Link
 	cursor, err := collection.Find(ctx, filter)
 	if err != nil {
@@ -193,13 +190,9 @@ func main() {
 	}
 	shortid.SetDefault(sid)
 
-	// ctx := context.Background()
+	ctx := context.Background()
 	mongoUri := getMongoURI()
-	// client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoUri))
 	client := database.CreateClient(mongoUri)
-	// if err != nil {
-	// 	log.Fatalf("Error connecting to MongoDB: %v", err)
-	// }
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
 			log.Fatalf("Error disconnecting from MongoDB: %v", err)
@@ -215,9 +208,25 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	e.POST("/short", handleShortURL)
-	e.POST("/:shortUrl", handleIncrementVisit)
-	e.GET("/", handleGetAll)
+	e.POST("/short", func(c echo.Context) error {
+		url := c.FormValue("url")
+		var result Link
+		FetchItemFromCacheOrMongo(ctx, url, &result)
+		return c.JSON(http.StatusOK, result)
+	})
+	e.POST("/:shortUrl", func(c echo.Context) error {
+		shortUrl := c.Param("shortUrl")
+		var result Link
+		incrementVisit(ctx, shortUrl, &result)
+		return c.JSON(http.StatusOK, result)
+	})
+	e.GET("/", func(c echo.Context) error {
+		links, err := getAll(ctx)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
+		}
+		return c.JSON(http.StatusOK, links)
+	})
 
 	port := fmt.Sprintf(":%s", os.Getenv("APP_PORT"))
 	e.Logger.Fatal(e.Start(port))
@@ -228,26 +237,4 @@ func getMongoURI() string {
 		return fmt.Sprintf("mongodb://%s:%s@%s:%s/", os.Getenv("MONGO_ROOT_USERNAME"), os.Getenv("MONGO_ROOT_PASSWORD"), os.Getenv("MONGO_HOST"), os.Getenv("MONGO_PORT"))
 	}
 	return fmt.Sprintf("mongodb://127.0.0.1:%s/", os.Getenv("MONGO_PORT"))
-}
-
-func handleShortURL(c echo.Context) error {
-	url := c.FormValue("url")
-	var result Link
-	FetchItemFromCacheOrMongo(url, &result)
-	return c.JSON(http.StatusOK, result)
-}
-
-func handleIncrementVisit(c echo.Context) error {
-	shortUrl := c.Param("shortUrl")
-	var result Link
-	incrementVisit(shortUrl, &result)
-	return c.JSON(http.StatusOK, result)
-}
-
-func handleGetAll(c echo.Context) error {
-	links, err := getAll()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Cannot find anything")
-	}
-	return c.JSON(http.StatusOK, links)
 }
