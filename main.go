@@ -41,8 +41,9 @@ func createLink(ctx context.Context, link *Link) error {
 }
 
 func checkCachedValues(key string, link *Link) (bool, error) {
-	isCached, err := getFromCache(key, link)
-	if err != nil {
+	var isCached bool
+	var err error
+	if isCached, err = getFromCache(key, link); err != nil {
 		addToCache(link.Long, link)
 		return false, err
 	}
