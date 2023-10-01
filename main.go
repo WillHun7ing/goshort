@@ -52,8 +52,7 @@ func checkCachedValues(key string, link *Link) (bool, error) {
 
 func FetchItemFromCacheOrMongo(ctx context.Context, longUrl string, result *Link) error {
 	filter := bson.D{{"long", longUrl}}
-	isCached, _ := checkCachedValues(longUrl, result)
-	if isCached {
+	if isCached, _ := checkCachedValues(longUrl, result); isCached {
 		return nil
 	}
 	err := collection.FindOne(ctx, filter).Decode(result)
